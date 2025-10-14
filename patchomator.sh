@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 VERSION="1.1.4"
-VERSIONDATE="2025-08-20"
+VERSIONDATE="2025-10-14"
 
 # Gigantic Thanks to:
 #	rondelltron
@@ -226,7 +226,7 @@ usage() {
 }
 
 finishAndExit () {
-	echo "Patchomator finished: $(date '+%F %H:%M:%S')" | tee -a "$logPATH"
+	infoOut "Patchomator finished: $(date '+%F %H:%M:%S')" REQ
 	(( ${#quietmode} )) || (( ${#readconfig} )) || echo "quit:" >> $DialogPATH
 	rm -f "$lockfile" 2>/dev/null
 	exit $1
@@ -250,30 +250,51 @@ makepath() { # creates the full path to a file, but not the file itself
 	mkdir -p "$(sed 's/\(.*\)\/.*/\1/' <<< $1)" # && touch $1
 }
 
+terminal_msg() {
+	local msg="${1//\{\{YELLOW\}\}/$YELLOW}"
+	msg="${msg//\{\{BOLD\}\}/$BOLD}"
+	msg="${msg//\{\{RED\}\}/$RED}"
+	msg="${msg//\{\{RESET\}\}/$RESET}"
+	echo "$msg"
+}
+
+log_msg() {
+	local msg="${1//\{\{YELLOW\}\}/}"
+	msg="${msg//\{\{BOLD\}\}/}"
+	msg="${msg//\{\{RED\}\}/}"
+	msg="${msg//\{\{RESET\}\}/}"
+	echo "$msg"
+}
+
 notice() { # verbose mode
 	if (( ${#verbose} )); then
-		echo "${YELLOW}[NOTICE]${RESET} $1" | tee -a "$logPATH"
+		echo "${YELLOW}[NOTICE]${RESET} $(terminal_msg "$1")"
+		echo "[NOTICE] $(log_msg "$1")" >> "$logPATH"
 	fi
 }
 
 infoOut() { # normal messages
-	if (( ! ${#quietmode} )); then
-		echo "$1" | tee -a "$logPATH"
-		echo "progresstext: $1" >> $DialogPATH
+	if (( ! ${#quietmode} )) || [[ "$2" == "REQ" ]]; then
+		echo "$(terminal_msg "$1")"
+		echo "$(log_msg "$1")" >> "$logPATH"
+		echo "progresstext: $(log_msg "$1")" >> "$DialogPATH"
 	fi
 }
 
 warning() { # warning messges
-	echo "${YELLOW}[WARN]${RESET} $1" | tee -a "$logPATH"
+	echo "${YELLOW}[WARN]${RESET} $(terminal_msg "$1")"
+	echo "[WARN] $(log_msg "$1")" >> "$logPATH"
 }
 
 error() { # bad, but recoverable
-	echo "${BOLD}[ERROR]${RESET} $1" | tee -a "$logPATH"
+	echo "${BOLD}[ERROR]${RESET} $(terminal_msg "$1")"
+	echo "[ERROR] $(log_msg "$1")" >> "$logPATH"
 	let errorCount++
 }
 
 fatal() { # something bad happened.
-	echo "\n${BOLD}${RED}[FATAL ERROR]${RESET} $1\n\n" | tee -a "$logPATH"
+	echo "\n${BOLD}${RED}[FATAL ERROR]${RESET} $(terminal_msg "$1")\n\n"
+	echo "\n[FATAL ERROR] $(log_msg "$1")\n\n" >> "$logPATH"
 	cleanup
 }
 
@@ -303,17 +324,17 @@ checkInstallomator() {
 
 	infoOut "Checking Installomator version."
 	# check for existence of Installomator to enable installation of updates
-	notice "Looking for Installomator.sh at ${YELLOW}$InstallomatorPATH ${RESET}"
+	notice "Looking for Installomator.sh at {{YELLOW}}$InstallomatorPATH{{RESET}}"
 
 	if [[ ! -f "$InstallomatorPATH" ]]; then
-		error "Installomator was not found at ${YELLOW}$InstallomatorPATH ${RESET}"
+		error "Installomator was not found at {{YELLOW}}$InstallomatorPATH{{RESET}}"
 		OfferToInstall
 	fi
 
 	InstalledVersion="$($InstallomatorPATH version | tail -1)"
 
 	if [ $(echo $InstalledVersion | cut -d . -f 1) -lt 10 ]; then
-		fatal "Installomator is installed, but is out of date. Versions prior to 10.0 function unpredictably with Patchomator.\nYou can probably update it by running \n\t${YELLOW}sudo $InstallomatorPATH installomator ${RESET}"
+		fatal "Installomator is installed, but is out of date. Versions prior to 10.0 function unpredictably with Patchomator.\nYou can probably update it by running \n\t{{YELLOW}}sudo $InstallomatorPATH installomator{{RESET}}"
 	fi
 
 	LatestVersion="$(versionFromGit Installomator Installomator)"
@@ -326,7 +347,7 @@ checkInstallomator() {
 	if [[ -n "$LatestVersion" ]] && [[ -n "$InstalledVersion" ]]; then
 		notice "Latest Version: $LatestVersion - Installed Version: $InstalledVersion"
 		if ! is-at-least "$LatestVersion" "$InstalledVersion"; then
-			error "Installomator was found, but is out of date. You can update it by running \n\t${YELLOW}sudo $InstallomatorPATH installomator ${RESET}"
+			error "Installomator was found, but is out of date. You can update it by running \n\t{{YELLOW}}sudo $InstallomatorPATH installomator{{RESET}}"
 			OfferToInstall
 		fi
 	fi
@@ -341,9 +362,9 @@ checkInstallomator() {
 OfferToInstall() {
 	#Check your privilege
 	if (( ${#noninteractive} )); then
-		fatal "Specify a different path with \"${YELLOW}-p [path to Installomator]${RESET}\" or download and install it from here:\
-		\n\t ${YELLOW}https://github.com/Installomator/Installomator${RESET}\
-		\n\nThis script can also attempt to install Installomator for you. Re-run patchomator with ${YELLOW}sudo${RESET} and without ${YELLOW}--yes${RESET}"
+		fatal "Specify a different path with \"{{YELLOW}}-p [path to Installomator]{{RESET}}\" or download and install it from here:\
+		\n\t {{YELLOW}}https://github.com/Installomator/Installomator{{RESET}}\
+		\n\nThis script can also attempt to install Installomator for you. Re-run patchomator with {{YELLOW}}sudo{{RESET}} and without {{YELLOW}}--yes{{RESET}}"
 	else
 		echo "Patchomator can still discover apps and create a configuration for later use, but will not be able to install or update anything without Installomator."
 		if [[ -n "$dialogPID" ]]; then
@@ -393,8 +414,8 @@ OfferToInstall() {
 		if [[ $DownloadFromGithub =~ '[Yy]' ]]; then
 			installInstallomator
 		else
-			fatal "Patchomator cannot install or update apps without the latest Installomator. If you would like to continue, either re-run Patchomator without ${YELLOW}--install${RESET}, or install Installomator from this URL:\
-			\n\t ${YELLOW}https://github.com/Installomator/Installomator${RESET}"
+			fatal "Patchomator cannot install or update apps without the latest Installomator. If you would like to continue, either re-run Patchomator without {{YELLOW}}--install{{RESET}}, or install Installomator from this URL:\
+			\n\t {{YELLOW}}https://github.com/Installomator/Installomator{{RESET}}"
 		fi
 	fi
 }
@@ -567,18 +588,29 @@ doInstallations() {
 		let installedLabels++
 		dialogPercent $installedLabels $numLabels
 
-		infoOut "Installing ${label}..."
+		infoOut "Installing ${label}..." REQ
 
 		if [[ "$label" == "installomator" ]] || [[ "$label" == "patchomator" ]]; then
 			if (( ! ${#updatescripts} )); then
-				infoOut "${BOLD}Skipping $label.${RESET}\n"
+				infoOut "{{BOLD}}Skipping $label.{{RESET}}\n" REQ
 				continue
 			fi
 		fi
 
-		${InstallomatorPATH} ${label} ${InstallomatorOptionsString}
+		if (( ${#verbose} )); then
+			${InstallomatorPATH} ${label} ${InstallomatorOptionsString}
+		else
+			${InstallomatorPATH} ${label} ${InstallomatorOptionsString} &>/dev/null
+		fi
 		installomatorStatus=$(echo $?)
-		if [ $installomatorStatus != 0 ]; then
+
+		if (( installomatorStatus == 12 )); then
+			infoOut "Installomator set to silent_fail and encountered blocking processes. Skipping ${label}.\n" REQ
+		elif (( installomatorStatus == 11 )); then
+			error "Error installing ${label}. Installomator could not stop blocking processes. Exit code $installomatorStatus\n"
+		elif (( installomatorStatus == 0 )); then
+			infoOut "Successfuly installed or updated ${label}.\n" REQ
+		else
 			error "Error installing ${label}. Exit code $installomatorStatus\n"
 		fi
 	done
@@ -769,7 +801,7 @@ verifyApp() {
 						return
 					elif [[ $verifyScriptStatus -eq 1 ]]; then
 						infoOut "The script has been modified from it's original version."
-						infoOut "\t${BOLD}Skipping.${RESET}"
+						infoOut "\t{{BOLD}}Skipping.{{RESET}}"
 						return
 					fi
 				fi
@@ -802,7 +834,7 @@ verifyApp() {
 		infoOut "${appPath} already linked to label ${exists}."
 
 		if (( ${#noninteractive} )); then
-			infoOut "\t${BOLD}Skipping.${RESET}"
+			infoOut "\t{{BOLD}}Skipping.{{RESET}}"
 			return
 		else
 			if [[ -n "$dialogPID" ]]; then
@@ -850,7 +882,7 @@ verifyApp() {
 
 			if [[ "$replaceLabel" =~ [Yy] ]]
 			then
-				infoOut "\t${BOLD}Replacing.${RESET}"
+				infoOut "\t{{BOLD}}Replacing.{{RESET}}"
 				configArray[$appPath]=$foundLabel
 
 				# add replaced label to Ignored list
@@ -873,7 +905,7 @@ verifyApp() {
 					/usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"${exists}\"" $configFile
 				fi
 			else
-				infoOut "\t${BOLD}Skipping.${RESET}"
+				infoOut "\t{{BOLD}}Skipping.{{RESET}}"
 				# add skipped label to Ignored list
 				ignoredLabelsArray["$foundLabel"]=1
 				(( ${#writeconfig} )) && /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"${foundLabel}\"" $configFile
@@ -1105,7 +1137,7 @@ fi
 
 # prevent patchomator modify the content of the managed config
 if [[ $configFile == $managedConfigFile ]] && (( ${#writeconfig} )); then
-	fatal "You should not manualy overwrite ${YELLOW}$managedConfigFile${RESET}"
+	fatal "You should not manualy overwrite {{YELLOW}}$managedConfigFile{{RESET}}"
 fi
 
 InstallomatorPATH="$defaultInstallomatorPATH"
@@ -1255,7 +1287,7 @@ elif [[ ! -f "$logPATH" ]] then
 	touch "$logPATH" 2>/dev/null && chmod a+rw "$logPATH" || error "$logPATH not writable."
 fi
 
-echo "Patchomator starting: $(date '+%F %H:%M:%S')" | tee -a "$logPATH"
+infoOut "Patchomator starting: $(date '+%F %H:%M:%S')" REQ
 
 notice "Option Count ${#InstallomatorOptions[@]}"
 notice "Installomator Options:"
@@ -1273,7 +1305,7 @@ then
 
 	if [[ ! -f "$configFile" ]]
 	then
-		fatal "No config file at $configFile. Run patchomator again with ${YELLOW}--write${RESET} to create one now.\n"
+		fatal "No config file at $configFile. Run patchomator again with {{YELLOW}}--write{{RESET}} to create one now.\n"
 	else
 		displayConfig
 	fi
@@ -1308,7 +1340,7 @@ fi
 if (( ${#installmode} )); then
 	# Check your privilege
 	if (( ! $IAMROOT )); then
-		fatal "Install mode must be run with root/sudo privileges. Re-run Patchomator with\n\t ${YELLOW}sudo zsh patchomator.sh --install${RESET}"
+		fatal "Install mode must be run with root/sudo privileges. Re-run Patchomator with\n\t {{YELLOW}}sudo zsh patchomator.sh --install{{RESET}}"
 	fi
 
 	# can't install without the 'mator
@@ -1348,7 +1380,7 @@ if (( ${#writeconfig} )); then
 				infoOut "No existing config file at $configFile. Creating one now."
 			else
 				# exists, but not writable
-				fatal "$(dirname $configFile) exists, but is not writable. Re-run patchomator with sudo to create the config file there, or use a writable path with\n\t ${YELLOW}--config \"path to config file\"${RESET}"
+				fatal "$(dirname $configFile) exists, but is not writable. Re-run patchomator with sudo to create the config file there, or use a writable path with\n\t {{YELLOW}}--config \"path to config file\"{{RESET}}"
 			fi
 		else # directory doesn't exist
 			infoOut "The path to $configFile does not exist. Making path and creating file now."
@@ -1356,7 +1388,7 @@ if (( ${#writeconfig} )); then
 		fi
 
 		# creates a blank plist
-		plutil -create xml1 "$configFile" || fatal "Unable to create $configFile. Re-run patchomator with sudo to create the config file there, or use a writable path with\n\t ${YELLOW}--config \"path to config file\"${RESET}"
+		plutil -create xml1 "$configFile" || fatal "Unable to create $configFile. Re-run patchomator with sudo to create the config file there, or use a writable path with\n\t {{YELLOW}}--config \"path to config file\"{{RESET}}"
 
 		# add sections for label arrays
 		/usr/libexec/PlistBuddy -c 'add ":IgnoredLabels" array' "${configFile}"
@@ -1367,7 +1399,7 @@ if (( ${#writeconfig} )); then
 
 		if [[ ! -w "$configFile" ]]
 		then
-			fatal "$configFile is not writable. Re-run patchomator with sudo, or use a writable path with\n\t ${YELLOW}--config \"path to config file\"${RESET}"
+			fatal "$configFile is not writable. Re-run patchomator with sudo, or use a writable path with\n\t {{YELLOW}}--config \"path to config file\"{{RESET}}"
 		fi
 
 		infoOut "Refreshing $configFile"
@@ -1551,9 +1583,9 @@ if [[ $skipDiscovery != true ]]; then
 	done
 
 	if (( appNeedsUpdates > 0 )); then
-		infoOut "${BOLD}$appNeedsUpdates of the $uniqueAppTotal found labels need updates.${RESET}"
+		infoOut "{{BOLD}}$appNeedsUpdates of the $uniqueAppTotal found labels need updates.{{RESET}}"
 	elif (( processedLabels > 0 )); then
-		infoOut "${BOLD}None of the found apps need updates.${RESET}"
+		infoOut "{{BOLD}}None of the found apps need updates.{{RESET}}"
 	fi
 
 	kill "$caffeinatepid" 2>/dev/null
@@ -1610,9 +1642,9 @@ fi
 
 if [ "$errorCount" -gt 0 ]
 then
-	infoOut "${BOLD}Completed with $errorCount errors.${RESET}\n"
+	infoOut "{{BOLD}}Completed with $errorCount errors.{{RESET}}\n"
 else
-	infoOut "${BOLD}Done.${RESET}\n"
+	infoOut "{{BOLD}}Done.{{RESET}}\n"
 fi
 
 if (( ! (${#quietmode} && ${#writeconfig}) )) && (( ! ${#installmode} )); then
